@@ -166,9 +166,10 @@ def is_spam_message(message: str, threshold: float = 0.5, metadata: dict = None)
 
 # ===================== Configuration =====================
 
-OLLAMA_URL = "http://localhost:11434/api/generate"
-OLLAMA_MODEL = "sarah:latest"  # Change to your model (try llama3.2:1b for speed)
-OLLAMA_TIMEOUT = 60  # Reduced timeout
+OLLAMA_URL = os.getenv("OLLAMA_URL", "http://localhost:11434/api/generate")
+OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "sarah:latest")  # Change to your model
+OLLAMA_TIMEOUT = int(os.getenv("OLLAMA_TIMEOUT", "60"))
+
 OLLAMA_MAX_RETRIES = 2  # Reduced retries for speed
 USE_STREAMING = True  # Stream responses for faster perceived performance
 USE_FAST_MODE = True  # Use fallback for first 1-2 turns
