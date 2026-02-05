@@ -164,6 +164,10 @@ class AnalysisResponse(BaseModel):
     threat_intelligence: dict
     features: dict
     processing_time_ms: float
+    # Honeypot response fields
+    response: Optional[str] = None
+    reply: Optional[str] = None
+    extracted_intel: Optional[dict] = None
 
 
 class SimulationResponse(BaseModel):
@@ -272,6 +276,11 @@ async def analyze_message(request: MessageRequest, api_key: str = Depends(get_ap
     # Calculate processing time
     processing_time = (time.time() - start_time) * 1000
     
+    # Generate honeypot response if it's spam
+    honeypot_response = None
+    if is_spam:
+        honeypot_response = "Oh really? That sounds interesting. Can you tell me more about this?"
+    
     # Store for risk report
     ModelCache.last_analysis = {
         'text': text[:100] + '...' if len(text) > 100 else text,
@@ -298,7 +307,10 @@ async def analyze_message(request: MessageRequest, api_key: str = Depends(get_ap
         recommended_action=risk_result['recommended_action'],
         threat_intelligence=threat_intel,
         features=features,
-        processing_time_ms=round(processing_time, 2)
+        processing_time_ms=round(processing_time, 2),
+        response=honeypot_response,
+        reply=honeypot_response,
+        extracted_intel=threat_intel
     )
 
 
