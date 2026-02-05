@@ -274,10 +274,21 @@ async def analyze_message(request: Request):
             detail="Spam detection model not loaded. Run training first: python src/train_spam.py"
         )
     
-    # Get text from any of the possible field names
-    text = (data.get('text') or data.get('message') or data.get('scam_message') or 
-            data.get('content') or data.get('input') or data.get('query') or 
-            data.get('body') or data.get('msg') or "")
+    # Extract text - handle nested 'message' object from honeypot tester
+    text = None
+    
+    # Check if 'message' is a nested object with 'text' inside
+    message_field = data.get('message')
+    if isinstance(message_field, dict):
+        text = message_field.get('text') or message_field.get('content') or message_field.get('body')
+    elif isinstance(message_field, str):
+        text = message_field
+    
+    # Fallback to other top-level fields
+    if not text:
+        text = (data.get('text') or data.get('scam_message') or 
+                data.get('content') or data.get('input') or data.get('query') or 
+                data.get('body') or data.get('msg') or "")
     
     if not text:
         raise HTTPException(
@@ -285,9 +296,13 @@ async def analyze_message(request: Request):
             detail=f"A message field is required. Received fields: {list(data.keys())}"
         )
     
+    # Extract metadata - handle nested structure
+    meta = data.get('metadata', {})
+    msg_obj = data.get('message', {}) if isinstance(data.get('message'), dict) else {}
+    
     metadata = {
-        'sender': data.get('sender'),
-        'channel': data.get('channel')
+        'sender': msg_obj.get('sender') or data.get('sender'),
+        'channel': meta.get('channel') or data.get('channel')
     }
     
     # Preprocess message
