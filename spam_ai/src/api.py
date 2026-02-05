@@ -115,13 +115,16 @@ app.add_middleware(
 class MessageRequest(BaseModel):
     text: Optional[str] = Field(None, description="Message text to analyze")
     message: Optional[str] = Field(None, description="Message text to analyze (alias for text)")
+    scam_message: Optional[str] = Field(None, description="Scam message to analyze")
+    content: Optional[str] = Field(None, description="Content to analyze")
+    input: Optional[str] = Field(None, description="Input text to analyze")
+    query: Optional[str] = Field(None, description="Query text to analyze")
     sender: Optional[str] = Field(None, description="Sender identifier")
     channel: Optional[str] = Field(None, description="Channel (sms, email, etc)")
     
-    @property
-    def content(self) -> str:
-        """Get message content from either 'text' or 'message' field."""
-        return self.text or self.message or ""
+    def get_message_text(self) -> str:
+        """Get message content from any of the possible field names."""
+        return self.text or self.message or self.scam_message or self.content or self.input or self.query or ""
     
     class Config:
         json_schema_extra = {
@@ -215,12 +218,12 @@ async def analyze_message(request: MessageRequest, api_key: str = Depends(get_ap
             detail="Spam detection model not loaded. Run training first: python src/train_spam.py"
         )
     
-    # Get text from either 'text' or 'message' field
-    text = request.content
+    # Get text from any of the possible field names
+    text = request.get_message_text()
     if not text:
         raise HTTPException(
             status_code=422,
-            detail="Either 'text' or 'message' field is required"
+            detail="A message field is required (text, message, scam_message, content, input, or query)"
         )
     
     metadata = {
