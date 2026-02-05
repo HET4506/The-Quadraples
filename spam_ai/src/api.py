@@ -346,10 +346,33 @@ async def analyze_message(request: Request):
     # Calculate processing time
     processing_time = (time.time() - start_time) * 1000
     
-    # Generate honeypot response if it's spam
+    # Generate dynamic honeypot response using the scam baiting bot
     honeypot_response = None
     if is_spam:
-        honeypot_response = "Oh really? That sounds interesting. Can you tell me more about this?"
+        # Get or create session for this conversation
+        session_id = data.get('sessionId', 'default')
+        if session_id not in chat_sessions:
+            chat_sessions[session_id] = create_bot()
+        
+        bot = chat_sessions[session_id]
+        bot_result = bot.generate_response(text)
+        
+        if bot_result and bot_result.get('response'):
+            honeypot_response = bot_result['response']
+        else:
+            # Fallback responses if bot fails
+            import random
+            fallback_responses = [
+                "Oh my, that sounds serious! What should I do?",
+                "I'm confused... can you explain that again?",
+                "Wait, let me get my reading glasses. What was that number again?",
+                "My grandson usually helps me with these things. Can you hold on?",
+                "I need to write this down. Please repeat slowly.",
+                "Is this really from the bank? How do I know this is real?",
+                "Oh dear, I'm very worried now. What information do you need?",
+                "Let me find my account book first. Just a moment please.",
+            ]
+            honeypot_response = random.choice(fallback_responses)
     
     # Store for risk report
     ModelCache.last_analysis = {
