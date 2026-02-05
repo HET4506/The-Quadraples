@@ -10,14 +10,20 @@ Endpoints:
 import os
 import sys
 import time
-from typing import Optional
+import json
+import logging
+from typing import Optional, Any
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, HTTPException, Security, Depends
+from fastapi import FastAPI, HTTPException, Security, Depends, Request
 from fastapi.security.api_key import APIKeyHeader
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 import joblib
+
+# Setup logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # Add parent directory to path for imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -201,8 +207,30 @@ async def root():
     }
 
 
-@app.post("/analyze_message", response_model=AnalysisResponse, tags=["Analysis"])
-async def analyze_message(request: MessageRequest, api_key: str = Depends(get_api_key)):
+@app.post("/debug", tags=["Debug"])
+async def debug_endpoint(request: Request):
+    """Debug endpoint to see exactly what is being sent."""
+    body = await request.body()
+    headers = dict(request.headers)
+    try:
+        json_body = json.loads(body)
+    except:
+        json_body = body.decode() if body else None
+    
+    logger.info(f"=== DEBUG REQUEST ===")
+    logger.info(f"Headers: {headers}")
+    logger.info(f"Body: {json_body}")
+    logger.info(f"=====================")
+    
+    return {
+        "received_headers": headers,
+        "received_body": json_body,
+        "message": "Check your Render logs for full details"
+    }
+
+
+@app.post("/analyze_message", tags=["Analysis"])
+async def analyze_message(request: Request, api_key: str = Depends(get_api_key)):
     """
     Analyze a message for spam, scam type, and threat intelligence.
     
@@ -215,6 +243,18 @@ async def analyze_message(request: MessageRequest, api_key: str = Depends(get_ap
     """
     start_time = time.time()
     
+    # Parse raw request body to accept any field name
+    body = await request.body()
+    try:
+        data = json.loads(body) if body else {}
+    except:
+        data = {}
+    
+    # Log incoming request for debugging
+    logger.info(f"=== ANALYZE_MESSAGE REQUEST ===")
+    logger.info(f"Body: {data}")
+    logger.info(f"===============================")
+    
     # Check if models are loaded
     if ModelCache.spam_model is None:
         raise HTTPException(
@@ -223,16 +263,19 @@ async def analyze_message(request: MessageRequest, api_key: str = Depends(get_ap
         )
     
     # Get text from any of the possible field names
-    text = request.get_message_text()
+    text = (data.get('text') or data.get('message') or data.get('scam_message') or 
+            data.get('content') or data.get('input') or data.get('query') or 
+            data.get('body') or data.get('msg') or "")
+    
     if not text:
         raise HTTPException(
             status_code=422,
-            detail="A message field is required (text, message, scam_message, content, input, or query)"
+            detail=f"A message field is required. Received fields: {list(data.keys())}"
         )
     
     metadata = {
-        'sender': request.sender,
-        'channel': request.channel
+        'sender': data.get('sender'),
+        'channel': data.get('channel')
     }
     
     # Preprocess message
