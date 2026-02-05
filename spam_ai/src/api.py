@@ -230,7 +230,7 @@ async def debug_endpoint(request: Request):
 
 
 @app.post("/analyze_message", tags=["Analysis"])
-async def analyze_message(request: Request, api_key: str = Depends(get_api_key)):
+async def analyze_message(request: Request):
     """
     Analyze a message for spam, scam type, and threat intelligence.
     
@@ -243,6 +243,17 @@ async def analyze_message(request: Request, api_key: str = Depends(get_api_key))
     """
     start_time = time.time()
     
+    # Check API key from headers (case-insensitive)
+    headers = {k.lower(): v for k, v in request.headers.items()}
+    api_key = headers.get('x-api-key') or headers.get('api-key') or headers.get('apikey') or headers.get('authorization', '').replace('Bearer ', '')
+    
+    if api_key != EXPECTED_API_KEY:
+        logger.info(f"=== AUTH FAILED ===")
+        logger.info(f"Received key: {api_key}")
+        logger.info(f"Expected key: {EXPECTED_API_KEY}")
+        logger.info(f"All headers: {dict(request.headers)}")
+        raise HTTPException(status_code=403, detail="Invalid API key")
+    
     # Parse raw request body to accept any field name
     body = await request.body()
     try:
@@ -253,6 +264,7 @@ async def analyze_message(request: Request, api_key: str = Depends(get_api_key))
     # Log incoming request for debugging
     logger.info(f"=== ANALYZE_MESSAGE REQUEST ===")
     logger.info(f"Body: {data}")
+    logger.info(f"Keys in body: {list(data.keys())}")
     logger.info(f"===============================")
     
     # Check if models are loaded
