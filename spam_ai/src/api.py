@@ -13,7 +13,8 @@ import time
 from typing import Optional
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Security, Depends
+from fastapi.security.api_key import APIKeyHeader
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 import joblib
@@ -27,6 +28,19 @@ from src.extract_intel import extract_threat_intelligence
 from src.risk_engine import calculate_risk_score, assess_message_risk
 from src.scam_baiting_bot import ScamBaitingBot, create_bot, PERSONAS
 
+
+# Security
+API_KEY_NAME = "X-API-Key"
+api_key_header = APIKeyHeader(name=API_KEY_NAME, auto_error=True)
+EXPECTED_API_KEY = os.getenv("API_KEY", "quadraples-secret-key")
+
+async def get_api_key(api_key_header: str = Security(api_key_header)):
+    if api_key_header == EXPECTED_API_KEY:
+        return api_key_header
+    raise HTTPException(
+        status_code=403,
+        detail="Could not validate credentials"
+    )
 
 # Model paths
 MODEL_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'models')
@@ -175,7 +189,7 @@ async def root():
 
 
 @app.post("/analyze_message", response_model=AnalysisResponse, tags=["Analysis"])
-async def analyze_message(request: MessageRequest):
+async def analyze_message(request: MessageRequest, api_key: str = Depends(get_api_key)):
     """
     Analyze a message for spam, scam type, and threat intelligence.
     
@@ -351,7 +365,7 @@ class ChatResponse(BaseModel):
 
 
 @app.post("/chat/start", tags=["Scam Baiting Chat"])
-async def start_chat_session(session_id: str = "default"):
+async def start_chat_session(session_id: str = "default", api_key: str = Depends(get_api_key)):
     """
     Start a new scam baiting chat session.
     
@@ -369,7 +383,7 @@ async def start_chat_session(session_id: str = "default"):
 
 
 @app.post("/chat/respond", response_model=ChatResponse, tags=["Scam Baiting Chat"])
-async def chat_respond(request: ChatRequest):
+async def chat_respond(request: ChatRequest, api_key: str = Depends(get_api_key)):
     """
     Send a scammer message and get the victim bot's response.
     
@@ -454,5 +468,5 @@ async def end_chat_session(session_id: str):
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="127.0.0.1", port=8000)
+    uvicorn.run(app, host="0.0.0.0", port=8000)
 
