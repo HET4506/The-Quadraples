@@ -113,9 +113,15 @@ app.add_middleware(
 # ===================== Request/Response Models =====================
 
 class MessageRequest(BaseModel):
-    text: str = Field(..., description="Message text to analyze")
+    text: Optional[str] = Field(None, description="Message text to analyze")
+    message: Optional[str] = Field(None, description="Message text to analyze (alias for text)")
     sender: Optional[str] = Field(None, description="Sender identifier")
     channel: Optional[str] = Field(None, description="Channel (sms, email, etc)")
+    
+    @property
+    def content(self) -> str:
+        """Get message content from either 'text' or 'message' field."""
+        return self.text or self.message or ""
     
     class Config:
         json_schema_extra = {
@@ -209,7 +215,14 @@ async def analyze_message(request: MessageRequest, api_key: str = Depends(get_ap
             detail="Spam detection model not loaded. Run training first: python src/train_spam.py"
         )
     
-    text = request.text
+    # Get text from either 'text' or 'message' field
+    text = request.content
+    if not text:
+        raise HTTPException(
+            status_code=422,
+            detail="Either 'text' or 'message' field is required"
+        )
+    
     metadata = {
         'sender': request.sender,
         'channel': request.channel
